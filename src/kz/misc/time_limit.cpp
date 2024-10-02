@@ -16,10 +16,6 @@ void KZ::misc::EnforceTimeLimit()
 	{
 		mp_roundtime->m_cvvMaxValue->m_flValue = 1440.0f;
 	}
-	if (mp_timelimit)
-	{
-		*(f32 *)(&mp_timelimit->values) = *(f32 *)(&mp_roundtime->values);
-	}
 }
 
 void KZ::misc::InitTimeLimit()
