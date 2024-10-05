@@ -324,7 +324,7 @@ void KZ::misc::OnRoundStart()
 		gameRules->m_bGameRestart(true);
 		gameRules->m_iRoundWinStatus(1);
 		// Make sure that the round time is synchronized with the global time.
-		gameRules->m_fRoundStartTime().Get().GetTime();
-		gameRules->m_flGameStartTime().Get().GetTime();
+		gameRules->m_fRoundStartTime().GetTime();
+		gameRules->m_flGameStartTime().GetTime();
 	}
 }
