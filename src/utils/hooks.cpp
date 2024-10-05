@@ -695,7 +695,7 @@ static_function void Hook_ClientDisconnect(CPlayerSlot slot, ENetworkDisconnecti
 	// Immediately remove the player off the list. We don't need to keep them around.
 	if (player->GetController())
 	{
-		player->GetController()->m_LastTimePlayerWasDisconnectedForPawnsRemove().m_Value(0.01f);
+		player->GetController()->m_LastTimePlayerWasDisconnectedForPawnsRemove().GetTime();
 	}
 	if (player->GetPlayerPawn())
 	{
