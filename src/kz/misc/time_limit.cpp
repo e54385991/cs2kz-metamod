@@ -12,17 +12,9 @@ void KZ::misc::EnforceTimeLimit()
 	{
 		mp_roundtime = g_pCVar->GetConVar(g_pCVar->FindConVar("mp_roundtime"));
 	}
-	if (!mp_timelimit)
-	{
-		mp_timelimit = g_pCVar->GetConVar(g_pCVar->FindConVar("mp_timelimit"));
-	}
 	if (mp_roundtime)
 	{
 		mp_roundtime->m_cvvMaxValue->m_flValue = 1440.0f;
-	}
-	if (mp_timelimit)
-	{
-		*(f32 *)(&mp_timelimit->values) = *(f32 *)(&mp_roundtime->values);
 	}
 }
 
