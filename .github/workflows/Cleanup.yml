@@ -1,0 +1,126 @@
+name: Cleanup old artifacts, workflow runs, releases, and tags
+
+on:
+  workflow_dispatch:  # 手动触发
+  schedule:
+    - cron: '0 0 * * *'  # 每天午夜自动运行
+
+permissions:
+  contents: write  # 用于删除发布和标签
+  actions: write   # 用于删除制品和工作流运行记录
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete artifacts and workflow runs older than 7 days while keeping latest 10 runs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 获取当前日期的 7 天前（UTC 时间）
+          cutoff_date=$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          echo "Deleting artifacts and workflow runs older than $cutoff_date, keeping latest 10 runs"
+
+          # 获取所有工作流运行，按创建时间降序排序
+          runs=$(gh api repos/${{ github.repository }}/actions/runs --paginate --jq '.workflow_runs[] | {id: .id, created_at: .created_at} | @base64')
+
+          # 初始化计数器
+          count=0
+
+          # 初始化一个数组来保存需要删除的运行 ID
+          runs_to_delete=()
+
+          # 遍历工作流运行
+          for run in $runs; do
+            _jq() {
+              echo "$run" | base64 --decode | jq -r "$1"
+            }
+            run_id=$(_jq '.id')
+            run_date=$(_jq '.created_at')
+
+            count=$((count+1))
+
+            # 保留最新的 10 个运行
+            if [ $count -le 10 ]; then
+              echo "Keeping run ID: $run_id"
+              continue
+            fi
+
+            # 检查运行是否早于 7 天前
+            if [[ "$run_date" < "$cutoff_date" ]]; then
+              echo "Marking run ID: $run_id for deletion"
+              runs_to_delete+=("$run_id")
+            else
+              echo "Run ID: $run_id is within 7 days, skipping"
+            fi
+          done
+
+          # 删除标记的运行
+          if [ ${#runs_to_delete[@]} -eq 0 ]; then
+            echo "No workflow runs to delete."
+          else
+            for run_id in "${runs_to_delete[@]}"; do
+              echo "Deleting workflow run ID: $run_id"
+              gh api --method DELETE repos/${{ github.repository }}/actions/runs/$run_id
+            done
+          fi
+
+      - name: Delete releases and tags older than 3 days, keeping latest 5 releases and ignoring the latest release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Deleting releases and tags older than 3 days, keeping latest 5 releases, and ignoring the latest release"
+
+          # 获取“最新发布”的 ID
+          latest_release_id=$(gh api repos/${{ github.repository }}/releases/latest --jq '.id' || echo "")
+
+          if [ -n "$latest_release_id" ]; then
+            echo "Latest release ID: $latest_release_id"
+          else
+            echo "No latest release found"
+          fi
+
+          # 获取所有发布（按创建时间降序排序）
+          releases=$(gh api repos/${{ github.repository }}/releases --paginate --jq '.[] | {id: .id, tag_name: .tag_name, created_at: .created_at} | @base64')
+
+          # 初始化计数器
+          count=0
+
+          # 遍历发布列表
+          for release in $releases; do
+            # 解码
+            _jq() {
+              echo "$release" | base64 --decode | jq -r "$1"
+            }
+            release_id=$(_jq '.id')
+            release_date=$(_jq '.created_at')
+            tag_name=$(_jq '.tag_name')
+
+            # 如果当前发布是最新发布，跳过删除
+            if [ "$release_id" -eq "$latest_release_id" ]; then
+              echo "Skipping latest release ID: $release_id"
+              continue
+            fi
+
+            count=$((count+1))
+
+            # 保留最新的 5 个发布
+            if [ $count -le 5 ]; then
+              echo "Keeping release ID: $release_id"
+              continue
+            fi
+
+            # 检查发布日期是否超过 3 天
+            if [[ $(date -d "$release_date" +%s) -lt $(date -d "3 days ago" +%s) ]]; then
+              echo "Deleting release ID: $release_id and tag: $tag_name"
+              # 删除发布
+              gh api --method DELETE repos/${{ github.repository }}/releases/$release_id
+              # 删除标签
+              # 对标签引用进行 URL 编码
+              encoded_ref=$(printf 'tags/%s' "$tag_name" | jq -s -R -r @uri)
+              # 删除标签
+              gh api --method DELETE repos/${{ github.repository }}/git/refs/$encoded_ref
+            else
+              echo "Release ID: $release_id is within 3 days, skipping"
+            fi
+          done
